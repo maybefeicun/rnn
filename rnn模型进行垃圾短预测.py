@@ -4,6 +4,15 @@
 # @File    : rnn模型进行垃圾短预测.py
 # @Software: PyCharm
 
+'''
+本代码主要取理解一下rnn的基本过程
+主要的函数：
+1.tf.nn.rnn_cell.BasicRNNCell（）：初始化一个rnn_cell
+2.tf.nn.dynamic_rnn（）：一次性执行n次的rnn过程，得到所有过程的输出结果与状态结果
+3.tf.nn.dropout（）：处理过拟合的情况
+4.tf.gather()：用来取张量的某一维的值
+'''
+
 import os
 import re
 import io
@@ -80,13 +89,13 @@ text_processed = np.array(text_processed) # 感觉与上面有点重复
 text_data_target = [1 if target == 'spam' else 0 for target in text_data_target]
 shuffled_ix = np.random.permutation(np.arange(len(text_data_target))) # 注意这里多了个premutation与arange函数
 x_shuffled = text_processed[shuffled_ix]
-y_shuffled = np.array(text_data_target)[shuffled_ix]
+y_shuffled = np.array(text_data_target)[shuffled_ix] # 这个要注意下，list不能取list[1, 2, 3]
 
 # 生成训练集与测试集
 ix_cutoff = round(len(y_shuffled) * 0.8)
 x_train, x_test = x_shuffled[:ix_cutoff], x_shuffled[ix_cutoff:]
 y_train, y_test = y_shuffled[:ix_cutoff], y_shuffled[ix_cutoff:]
-vocab_size = len(vocab_processor.vocabulary_) # 获取字典的大小
+vocab_size = len(vocab_processor.vocabulary_) # 获取字典的大小，单词数量为933
 print("vocabulary size : {:d}".format(vocab_size))
 
 # 声明计算图的占位符
@@ -94,7 +103,7 @@ x_data = tf.placeholder(shape=[None, max_sequence_length], dtype=tf.int32)
 y_output = tf.placeholder(shape=[None], dtype=tf.int32)
 # 构建词嵌入矩阵
 embedding_mat = tf.Variable(tf.random_uniform([vocab_size, embedding_size], maxval=1.0, minval=-1.0))
-embedding_output = tf.nn.embedding_lookup(embedding_mat, x_data)
+embedding_output = tf.nn.embedding_lookup(embedding_mat, x_data) # embedding_output的shape=(?,25,50)
 
 # 声明算法模型
 if tf.__version__[0]>='1':
@@ -106,6 +115,9 @@ output, state = tf.nn.dynamic_rnn(cell, embedding_output, dtype=tf.float32)
 output = tf.nn.dropout(output, dropout_keep_prob) # dropout是用来防止过拟合的
 
 output = tf.transpose(output, [1, 0, 2]) # 这个变化矩阵的原因要注意
+'''
+last才是最后我们所需要的结果
+'''
 last = tf.gather(output, int(output.get_shape()[0]) - 1) # 这个写法就是用来取最后一个time_step的输出值
 
 # 为了完成rnn预测，我们通过全连接层将rnn_size大小的输出转换成二分类输出
@@ -143,7 +155,7 @@ for epoch in range(epochs):
     for i in range(num_batches):
         # Select train data
         min_ix = i * batch_size
-        max_ix = np.min([len(x_train), ((i + 1) * batch_size)])
+        max_ix = np.min([len(x_train), ((i + 1) * batch_size)]) # 这个用法我之前在weibo_data处理中也想用
         x_train_batch = x_train[min_ix:max_ix]
         y_train_batch = y_train[min_ix:max_ix]
 

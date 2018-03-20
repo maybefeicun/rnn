@@ -106,6 +106,19 @@ embedding_mat = tf.Variable(tf.random_uniform([vocab_size, embedding_size], maxv
 embedding_output = tf.nn.embedding_lookup(embedding_mat, x_data) # embedding_output的shape=(?,25,50)
 
 # 声明算法模型
+####################
+'''
+两个######之间的算法为核心算法，时进行rnn的整个过程
+1.一开始先得到句子的向量
+2.通过句子的向量lookup词嵌入矩阵，我们可以得到词嵌入的结果，
+                                shape=(batch_size, max_words{一个句子的最大长度}, embedding_size{词嵌入的向量维数})
+3.利用tf.nn.dynamic_rnn()的方法我们可以得到整个过程中的输出值与状态值，
+                                shape=(batch_size, max_words, rnn_size{rnn设置的节点数或者说是维数})
+4.第3步所求的结果是整个过程的结果（还有进行dropout），我们的需求是只需要最后一个输出结果就行了，所以使用了transpose与gather这些函数
+                                shape=(batch_size, rnn_size)
+5.将这个结果带入输出层中进行y = w*x + b的计算过程，最后输出预测结果
+6.当然这个过程还要进行softmax的过程
+'''
 if tf.__version__[0]>='1':
     cell=tf.contrib.rnn.BasicRNNCell(num_units = rnn_size)
 else:
@@ -119,6 +132,7 @@ output = tf.transpose(output, [1, 0, 2]) # 这个变化矩阵的原因要注意
 last才是最后我们所需要的结果
 '''
 last = tf.gather(output, int(output.get_shape()[0]) - 1) # 这个写法就是用来取最后一个time_step的输出值
+####################
 
 # 为了完成rnn预测，我们通过全连接层将rnn_size大小的输出转换成二分类输出
 weight = tf.Variable(tf.truncated_normal([rnn_size, 2], stddev=0.1))

@@ -52,7 +52,11 @@ s_text = re.sub('\s+', ' ', s_text).strip().lower() # 注意\s的写法
 def build_vocab(text, min_word_freq):
     word_counts = collections.Counter(text.split(' '))
     # 卧槽这个写法有点厉害了
-    word_counts = {key: val for key, val in word_counts if val > min_word_freq}
+    # for key, val in word_counts不能直接遍历
+    # for key, val in word_counts.items():
+    #     if val > min_word_freq:
+    #         word_counts[key] = val
+    word_counts = {key: val for key, val in word_counts.items() if val > min_word_freq}
     words = word_counts.keys()
     vocab_to_ix_dict = {key: (ix + 1) for ix, key in enumerate(words)} # ix+1是为了留一个给unknow
     vocab_to_ix_dict['unkown'] = 0

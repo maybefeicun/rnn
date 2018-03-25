@@ -7,6 +7,7 @@
 """
 从这段代码中，我明白了有些东西不需要自己能看懂，只需要能够使用即可
 比如这段代码中的class LSTM这个类，到时候就直接拿来用就行
+注意这是一个单层的lstm模型
 """
 
 import os
@@ -32,7 +33,7 @@ training_seq_len = 50 # 一次训练50行？
 embedding_size = rnn_size
 save_every = 500
 eval_every = 50
-prime_texts = ['thou art more', 'to be or not to', 'wherefore art thou']
+prime_texts = ['thou art more', 'to be or not to', 'wherefore art thou'] # 测试文档
 
 data_dir = 'temp'
 data_file = 'shakespeare.txt'
@@ -84,6 +85,11 @@ for ix, x in enumerate(s_text_words):
         s_text_ix.append(0)
 
 
+'''
+########上面的操作是将训练文档转换为词袋模型
+'''
+
+
 # Define LSTM RNN Model
 # 代码的核心部分，构建了一个lstm的类，我们通过这个类进行多次训练批量数据和臭氧生成的文本
 class LSTM_Model():
@@ -93,15 +99,19 @@ class LSTM_Model():
         self.rnn_size = rnn_size
         self.vocab_size = vocab_size
         self.infer_sample = infer_sample
-        self.learning_rate = learning_rate
+        self.learning_rate = learning_rate  # 以上都是设置参数
 
-        if infer_sample:
+        if infer_sample: # infer_sample只是个判别参数，当为True时就认为为测试模型
             self.batch_size = 1
             self.training_seq_len = 1
         else:
             self.batch_size = batch_size
             self.training_seq_len = training_seq_len
-
+        '''
+        这个是一个关键的代码
+        rnn.BasicLSTMCell来设置lstm的cell，这里只需要提供rnn_size这个参数
+        lstm_cell.zero_state来设置初始状态,这里只需要提供batch_size这个参数
+        '''
         self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.rnn_size)
         self.initial_state = self.lstm_cell.zero_state(self.batch_size, tf.float32) # 设置初始状态
 
@@ -134,10 +144,14 @@ class LSTM_Model():
 
             注意：num_or_size_splits一定要被value.shape()[axis]整除
 
-
             tf.squeeze(input, axis)
             # 't' is a tensor of shape [1, 2, 1, 3, 1, 1]
             tf.shape(tf.squeeze(t, [2, 4]))  # [1, 2, 3, 1]
+            '''
+            '''
+            详细理解下这段代码，首先从词嵌入矩阵中查找训练的向量
+            embedding_output.shape=[100, 50, 128]
+            接着从训练的向量中利用:tf.split与tf.squeeze函数转换为50长度的形状为100*128的张量列表
             '''
             rnn_inputs = tf.split(axis=1, num_or_size_splits=self.training_seq_len, value=embedding_output) # run_inputs为一个列表
             rnn_inputs_trimmed = [tf.squeeze(x, [1]) for x in rnn_inputs] # run_inputs_trimmed被压缩为一个[100, 128]的矩阵
@@ -162,7 +176,7 @@ class LSTM_Model():
         第四个参数loop_function如果不为空，则将该函数应用于第i个输出以得到第i+1个输入，此时decoder_inputs变量除了第一个元素之外其他元素会被忽略。
             其形式定义为：loop(prev, i)=next。prev是[batch_size x output_size]，i是表明第i步，next是[batch_size x input_size]
         '''
-        decoder = legacy_seq2seq.rnn_decoder
+        decoder = legacy_seq2seq.rnn_decoder # 对于rnn_decoder这个函数需要看看源码解释好好理解
         outputs, last_state = decoder(rnn_inputs_trimmed,
                                       self.initial_state,
                                       self.lstm_cell,
@@ -174,7 +188,7 @@ class LSTM_Model():
         tf.concat([t1, t2], 0)  # [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]
         tf.concat([t1, t2], 1)  # [[1, 2, 3, 7, 8, 9], [4, 5, 6, 10, 11, 12]]
         '''
-        output = tf.reshape(tf.concat(axis=1, values=outputs), [-1, self.rnn_size])
+        output = tf.reshape(tf.concat(axis=1, values=outputs), [-1, self.rnn_size]) # output.shape()=[5000, 128]
         # Logits and output
         self.logit_output = tf.matmul(output, W) + b
         self.model_output = tf.nn.softmax(self.logit_output)
@@ -218,7 +232,7 @@ lstm_model = LSTM_Model(embedding_size, rnn_size, batch_size, learning_rate,
                         training_seq_len, vocab_size)
 
 # Tell TensorFlow we are reusing the scope for the testing
-# 注意下当前的variable_scope
+# 注意下当前的variable_scope，这段代码是用来定义一个测试的lstm模型
 with tf.variable_scope(tf.get_variable_scope(), reuse=True):
     test_lstm_model = LSTM_Model(embedding_size, rnn_size, batch_size, learning_rate,
                                  training_seq_len, vocab_size, infer_sample=True)
@@ -227,10 +241,10 @@ with tf.variable_scope(tf.get_variable_scope(), reuse=True):
 # saver的用法需要十分注意#####
 saver = tf.train.Saver(tf.global_variables())
 
-# Create batches for each epoch
+# 将已经生成好的词袋模型转换为可以训练的数据集
 num_batches = int(len(s_text_ix) / (batch_size * training_seq_len)) + 1
 # Split up text indices into subarrays, of equal size
-batches = np.array_split(s_text_ix, num_batches)
+batches = np.array_split(s_text_ix, num_batches) # np.array_split可以将数组均分
 # Reshape each split into [batch_size, training_seq_len]
 batches = [np.resize(x, [batch_size, training_seq_len]) for x in batches]
 
@@ -245,7 +259,7 @@ for epoch in range(epochs):
     # Shuffle word indices
     random.shuffle(batches)
     # Create targets from shuffled batches
-    targets = [np.roll(x, -1, axis=1) for x in batches]
+    targets = [np.roll(x, -1, axis=1) for x in batches] # 去除目标值，这个也是一个有监督学习
     # Run a through one epoch
     print('Starting Epoch #{} of {}.'.format(epoch + 1, epochs))
     # Reset initial LSTM state every epoch
